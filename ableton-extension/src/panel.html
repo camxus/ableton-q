@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AbletonQ</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        hsl(0,0%,15%);
+      --bg-raised: hsl(0,0%,20%);
+      --bg-input:  hsl(0,0%,11%);
+      --border:    hsl(0,0%,8%);
+      --text:      hsl(0,0%,72%);
+      --text-dim:  hsl(0,0%,38%);
+      --accent:    hsl(31,100%,67%);
+      --green:     hsl(100,55%,50%);
+      --red:       hsl(0,60%,55%);
+      --amber:     hsl(38,95%,60%);
+      --user-bg:   hsl(0,0%,22%);
+      --event-bg:  hsl(220,18%,18%);
+    }
+
+    html {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "AbletonSansSmall", ui-monospace, monospace;
+      font-size: 11.5px;
+      font-weight: 500;
+      -webkit-font-smoothing: antialiased;
+      height: 100%;
+      overflow: hidden;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* ── Header ─────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      height: 38px;
+    }
+    .title {
+      font-size: 11px; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .header-right { display:flex; align-items:center; gap:10px; }
+    .status-pill  { display:flex; align-items:center; gap:5px; font-size:10px; color:var(--text-dim); }
+
+    .dot {
+      width:6px; height:6px; border-radius:50%;
+      background:var(--red); transition:background .25s; flex-shrink:0;
+    }
+    .dot.connected  { background:var(--green); }
+    .dot.connecting { background:var(--amber); animation:blink 1s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    .btn-connect {
+      font-family:inherit; font-size:10px; font-weight:600;
+      padding:2px 10px; height:20px; border-radius:10px;
+      border:1px solid var(--border); background:var(--bg-raised);
+      color:var(--text-dim); cursor:pointer;
+      transition:color .15s, border-color .15s;
+    }
+    .btn-connect:hover               { color:var(--text); border-color:hsl(0,0%,22%); }
+    .btn-connect.connecting          { color:var(--amber); border-color:var(--amber); pointer-events:none; }
+    .btn-connect.connected           { color:var(--red);   border-color:var(--red); }
+
+    /* ── Chat slide-down ─────────────────────────────── */
+    #chatWrap {
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows .36s cubic-bezier(.4,0,.2,1);
+      flex-shrink: 0;
+    }
+    #chatWrap.open { grid-template-rows: 1fr; }
+    #chatInner { overflow:hidden; border-bottom:1px solid var(--border); }
+
+    #chat {
+      height: 280px;
+      overflow-y: auto;
+      padding: 10px 12px 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    #chat::-webkit-scrollbar       { width:3px; }
+    #chat::-webkit-scrollbar-track { background:transparent; }
+    #chat::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+    /* ── Message bubbles ─────────────────────────────── */
+    .msg {
+      max-width: 94%;
+      padding: 6px 10px;
+      border-radius: 3px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 10.5px;
+      opacity: 0;
+      transform: translateY(6px);
+      animation: msgIn .28s cubic-bezier(.16,1,.3,1) forwards;
+    }
+    @keyframes msgIn { to { opacity:1; transform:translateY(0); } }
+    .msg.historic { animation-duration:.18s; }
+
+    .msg.user      { align-self:flex-end;   background:var(--user-bg);   border:1px solid var(--border); color:var(--accent); }
+    .msg.assistant { align-self:flex-start; background:var(--bg-raised); border:1px solid var(--border); color:var(--text); font-family:ui-monospace,monospace; font-size:10px; }
+    .msg.system    { align-self:center;     color:var(--text-dim); font-size:9.5px; font-style:italic; }
+    .msg.event     { align-self:flex-start; background:var(--event-bg);  border:1px solid hsl(220,20%,24%); color:hsl(200,70%,65%); font-family:ui-monospace,monospace; font-size:10px; }
+
+    .msg-ts { font-size:8.5px; color:var(--text-dim); margin-top:3px; }
+
+    /* ── Input zone ──────────────────────────────────── */
+    #inputZone { padding:10px 12px 8px; flex-shrink:0; position:relative; }
+
+    .input-row { display:flex; gap:6px; align-items:center; }
+
+    #cmdInput {
+      flex:1; background:var(--bg-input); color:var(--text);
+      border:1px solid var(--border); font-family:inherit;
+      font-size:11px; height:28px; padding:0 10px;
+      outline:none; border-radius:2px; transition:border-color .15s;
+    }
+    #cmdInput:focus        { border-color:hsl(0,0%,24%); }
+    #cmdInput::placeholder { color:var(--text-dim); }
+    #cmdInput:disabled     { opacity:.35; cursor:not-allowed; }
+
+    #sendBtn {
+      font-family:inherit; font-size:10.5px; font-weight:600;
+      height:28px; padding:0 14px; border-radius:14px;
+      border:1px solid transparent; background:var(--accent);
+      color:hsl(0,0%,10%); cursor:pointer; transition:opacity .15s;
+      white-space:nowrap; flex-shrink:0;
+    }
+    #sendBtn:hover:not(:disabled) { opacity:.82; }
+    #sendBtn:disabled             { opacity:.25; cursor:not-allowed; }
+
+    /* ── Toggle chat ─────────────────────────────────── */
+    .toggle-row {
+      display:flex; align-items:center; gap:4px; margin-top:6px;
+      background:none; border:none; color:var(--text-dim);
+      font-family:inherit; font-size:10px; cursor:pointer;
+      padding:0; width:fit-content; transition:color .15s; user-select:none;
+    }
+    .toggle-row:hover { color:var(--text); }
+    .toggle-row .chevron {
+      transform:rotate(0deg);
+      transition:transform .32s cubic-bezier(.4,0,.2,1);
+    }
+    .toggle-row.open .chevron { transform:rotate(180deg); }
+
+    /* ── Command palette ─────────────────────────────── */
+    #palette {
+      position: absolute;
+      bottom: calc(100% + 4px);
+      left: 12px;
+      right: 12px;
+      background: hsl(0,0%,13%);
+      border: 1px solid hsl(0,0%,22%);
+      border-radius: 6px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.6);
+      z-index: 100;
+      overflow: hidden;
+      display: none;
+      flex-direction: column;
+    }
+    #palette.open { display:flex; }
+
+    #paletteSearch {
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 11px;
+      height: 30px;
+      padding: 0 10px;
+      outline: none;
+      flex-shrink: 0;
+    }
+    #paletteSearch::placeholder { color: var(--text-dim); }
+
+    #paletteList {
+      max-height: 180px;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+    #paletteList::-webkit-scrollbar       { width:3px; }
+    #paletteList::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+    .pal-item {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 5px 10px;
+      cursor: pointer;
+      transition: background .1s;
+      border-radius: 2px;
+    }
+    .pal-item:hover, .pal-item.active {
+      background: hsl(0,0%,22%);
+    }
+    .pal-label  { font-size:11px; color:var(--text); flex:1; }
+    .pal-type   { font-size:9.5px; color:var(--text-dim); font-family:ui-monospace,monospace; }
+    .pal-params { font-size:9px; color:hsl(0,0%,30%); font-family:ui-monospace,monospace; margin-left:auto; }
+
+    /* highlight matched chars */
+    .pal-match { color: var(--accent); }
+
+    /* ── Toasts ──────────────────────────────────────── */
+    #toaster {
+      position:fixed; bottom:60px; left:50%; transform:translateX(-50%);
+      display:flex; flex-direction:column-reverse; gap:5px;
+      z-index:9999; pointer-events:none; width:calc(100% - 24px);
+    }
+    .toast {
+      display:flex; align-items:center; gap:8px;
+      padding:7px 11px; border-radius:6px;
+      border:1px solid var(--border); background:hsl(0,0%,19%);
+      color:var(--text); font-size:10.5px;
+      box-shadow:0 4px 18px rgba(0,0,0,.5);
+      pointer-events:auto;
+      animation:toastIn .22s cubic-bezier(.16,1,.3,1) forwards;
+    }
+    @keyframes toastIn {
+      from{opacity:0;transform:translateY(8px) scale(.95)}
+      to  {opacity:1;transform:translateY(0)   scale(1)}
+    }
+    .toast.hide { animation:toastOut .18s ease forwards; }
+    @keyframes toastOut { to{opacity:0;transform:translateY(4px) scale(.96)} }
+    .ti{flex-shrink:0;font-size:12px;}
+    .toast.success .ti::before{content:"✓";color:var(--green);}
+    .toast.error   .ti::before{content:"✕";color:var(--red);}
+    .toast.info    .ti::before{content:"●";color:var(--accent);}
+    .toast.warning .ti::before{content:"!";color:var(--amber);}
+  </style>
+</head>
+<body data-initial-state="">
+
+<!-- Header -->
+<header>
+  <span class="title">AbletonQ</span>
+  <div class="header-right">
+    <div class="status-pill">
+      <div class="dot" id="dot"></div>
+      <span id="statusLabel">Disconnected</span>
+    </div>
+    <button class="btn-connect" id="connectBtn" onclick="toggleConnect()">Connect</button>
+  </div>
+</header>
+
+<!-- Chat -->
+<div id="chatWrap">
+  <div id="chatInner">
+    <div id="chat"></div>
+  </div>
+</div>
+
+<!-- Input -->
+<div id="inputZone">
+  <!-- Command palette (floats above input) -->
+  <div id="palette">
+    <input id="paletteSearch" type="text" placeholder="Search commands…"
+      oninput="filterPalette(this.value)"
+      onkeydown="palKeydown(event)"
+      autocomplete="off" spellcheck="false"
+    />
+    <div id="paletteList"></div>
+  </div>
+
+  <div class="input-row">
+    <input id="cmdInput" type="text"
+      placeholder="Send a command… (/ for palette)"
+      disabled
+      oninput="onInputChange(this.value)"
+      onkeydown="inputKeydown(event)"
+    />
+    <button id="sendBtn" onclick="sendCmd()" disabled>Send</button>
+  </div>
+
+  <button class="toggle-row" id="toggleBtn" onclick="toggleChat()">
+    <svg class="chevron" width="10" height="10" viewBox="0 0 10 10"
+         fill="none" stroke="currentColor" stroke-width="1.6">
+      <polyline points="2,3.5 5,6.5 8,3.5"/>
+    </svg>
+    <span id="toggleLabel">Show chat</span>
+  </button>
+</div>
+
+<div id="toaster"></div>
+
+<script>
+// ── Bridge ────────────────────────────────────────────────────────────────────
+function postToHost(msg) {
+  if (window.webkit?.messageHandlers?.live)
+    window.webkit.messageHandlers.live.postMessage(msg);
+  else if (window.chrome?.webview)
+    window.chrome.webview.postMessage(msg);
+}
+function closeAndSend(payload) {
+  postToHost({ method:'close_and_send', params:[JSON.stringify(payload)] });
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(text, type='info', dur=3200) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span class="ti"></span><span>${text}</span>`;
+  document.getElementById('toaster').prepend(el);
+  setTimeout(() => {
+    el.classList.add('hide');
+    el.addEventListener('animationend', () => el.remove(), {once:true});
+  }, dur);
+}
+
+// ── Hydrate state ─────────────────────────────────────────────────────────────
+let connected   = false;
+let chatVisible = false;
+const messages  = [];
+let cmdList     = [];   // MCP_COMMANDS injected from extension
+
+(function hydrate() {
+  try {
+    const raw = document.body.dataset.initialState;
+    if (!raw) return;
+    const s = JSON.parse(decodeURIComponent(raw));
+    connected   = !!s.connected;
+    chatVisible = !!s.chatVisible;
+    cmdList     = s.commands || [];
+    (s.messages || []).forEach(m => messages.push(m));
+  } catch {}
+})();
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const chatWrap    = document.getElementById('chatWrap');
+const chatInner   = document.getElementById('chatInner');
+const chat        = document.getElementById('chat');
+const toggleBtn   = document.getElementById('toggleBtn');
+const toggleLbl   = document.getElementById('toggleLabel');
+const dot         = document.getElementById('dot');
+const statusLbl   = document.getElementById('statusLabel');
+const connectBtn  = document.getElementById('connectBtn');
+const cmdInput    = document.getElementById('cmdInput');
+const sendBtn     = document.getElementById('sendBtn');
+const palette     = document.getElementById('palette');
+const palSearch   = document.getElementById('paletteSearch');
+const palList     = document.getElementById('paletteList');
+
+// ── Command history (↑/↓) ────────────────────────────────────────────────────
+const history   = messages.filter(m => m.role === 'user').map(m => m.text);
+let   histIdx   = -1;
+let   draftText = '';
+
+// ── Palette state ─────────────────────────────────────────────────────────────
+let palOpen    = false;
+let palResults = [];
+let palActive  = 0;
+
+function fuzzy(needle, haystack) {
+  // returns array of {start,end} match ranges, or null if no match
+  needle = needle.toLowerCase();
+  haystack = haystack.toLowerCase();
+  let ni = 0, ranges = [], start = -1;
+  for (let i = 0; i < haystack.length && ni < needle.length; i++) {
+    if (haystack[i] === needle[ni]) {
+      if (start === -1) start = i;
+      ni++;
+      if (ni === needle.length) { ranges.push([start, i]); }
+    } else if (start !== -1) {
+      ranges.push([start, i - 1]);
+      start = -1;
+      // retry this char
+      if (haystack[i] === needle[ni]) { start = i; ni++; }
+    }
+  }
+  return ni === needle.length ? ranges : null;
+}
+
+function highlightLabel(label, query) {
+  if (!query) return label;
+  const lo = label.toLowerCase(), q = query.toLowerCase();
+  let out = '', ni = 0;
+  for (let i = 0; i < label.length; i++) {
+    if (ni < q.length && lo[i] === q[ni]) {
+      out += `<span class="pal-match">${label[i]}</span>`;
+      ni++;
+    } else {
+      out += label[i];
+    }
+  }
+  return out;
+}
+
+function openPalette() {
+  palOpen = true;
+  palette.classList.add('open');
+  filterPalette('');
+  palSearch.value = '';
+  palSearch.focus();
+}
+
+function closePalette() {
+  palOpen = false;
+  palette.classList.remove('open');
+  cmdInput.focus();
+}
+
+function filterPalette(q) {
+  q = q.trim();
+  palResults = q
+    ? cmdList.filter(c => fuzzy(q, c.label) || fuzzy(q, c.type))
+    : cmdList.slice();
+  palActive = 0;
+  renderPalette(q);
+}
+
+function renderPalette(q = '') {
+  palList.innerHTML = '';
+  if (!palResults.length) {
+    palList.innerHTML = '<div style="padding:8px 10px;color:var(--text-dim);font-size:10px;">No matches</div>';
+    return;
+  }
+  palResults.forEach((cmd, i) => {
+    const el = document.createElement('div');
+    el.className = 'pal-item' + (i === palActive ? ' active' : '');
+    const paramStr = cmd.params.length
+      ? cmd.params.map(p => p.name).join(', ')
+      : '';
+    el.innerHTML = `
+      <span class="pal-label">${highlightLabel(cmd.label, q)}</span>
+      <span class="pal-type">${cmd.type}</span>
+      ${paramStr ? `<span class="pal-params">${paramStr}</span>` : ''}
+    `;
+    el.onclick = () => selectPaletteItem(i);
+    palList.appendChild(el);
+  });
+}
+
+function selectPaletteItem(i) {
+  const cmd = palResults[i];
+  if (!cmd) return;
+  // Build the JSON skeleton and put it in the input
+  const obj = { type: cmd.type, params: {} };
+  cmd.params.forEach(p => { obj.params[p.name] = p.ex; });
+  const json = cmd.params.length
+    ? JSON.stringify(obj)
+    : JSON.stringify({ type: cmd.type });
+  cmdInput.value = json;
+  closePalette();
+}
+
+function palKeydown(e) {
+  if (e.key === 'Escape') { closePalette(); e.preventDefault(); return; }
+  if (e.key === 'ArrowDown') {
+    palActive = Math.min(palActive + 1, palResults.length - 1);
+    renderPalette(palSearch.value);
+    e.preventDefault();
+  } else if (e.key === 'ArrowUp') {
+    palActive = Math.max(palActive - 1, 0);
+    renderPalette(palSearch.value);
+    e.preventDefault();
+  } else if (e.key === 'Enter') {
+    selectPaletteItem(palActive);
+    e.preventDefault();
+  } else if (e.key === 'Tab') {
+    selectPaletteItem(palActive);
+    e.preventDefault();
+  }
+}
+
+// ── Input field behaviour ────────────────────────────────────────────────────
+function onInputChange(val) {
+  if (val === '/' && !palOpen) {
+    cmdInput.value = '';
+    openPalette();
+  } else if (palOpen && !val) {
+    closePalette();
+  }
+  histIdx = -1;
+}
+
+function inputKeydown(e) {
+  if (e.key === 'Enter' && !palOpen) { sendCmd(); return; }
+
+  // ↑/↓ history navigation
+  if (e.key === 'ArrowUp' && !palOpen) {
+    e.preventDefault();
+    if (history.length === 0) return;
+    if (histIdx === -1) {
+      draftText = cmdInput.value;
+      histIdx = history.length - 1;
+    } else {
+      histIdx = Math.max(0, histIdx - 1);
+    }
+    cmdInput.value = history[histIdx];
+    // move cursor to end
+    setTimeout(() => cmdInput.setSelectionRange(cmdInput.value.length, cmdInput.value.length), 0);
+  } else if (e.key === 'ArrowDown' && !palOpen) {
+    e.preventDefault();
+    if (histIdx === -1) return;
+    histIdx++;
+    if (histIdx >= history.length) {
+      histIdx = -1;
+      cmdInput.value = draftText;
+    } else {
+      cmdInput.value = history[histIdx];
+    }
+  } else if (e.key === 'Escape' && palOpen) {
+    closePalette();
+  }
+}
+
+// ── Chat render ───────────────────────────────────────────────────────────────
+function renderMessages() {
+  chat.innerHTML = '';
+  if (!messages.length) {
+    const hint = document.createElement('div');
+    hint.className = 'msg system historic';
+    hint.textContent = 'No messages yet. Type / to browse commands.';
+    chat.appendChild(hint);
+    return;
+  }
+  messages.forEach((m, i) => appendBubble(m, true, i * 35));
+  requestAnimationFrame(() => { chat.scrollTop = chat.scrollHeight; });
+}
+
+function appendBubble(m, historic = false, delayMs = 0) {
+  const div = document.createElement('div');
+  div.className = `msg ${m.role}${historic ? ' historic' : ''}`;
+  div.style.animationDelay = `${delayMs}ms`;
+  div.textContent = m.text;
+  if (m.role !== 'system') {
+    const ts = document.createElement('div');
+    ts.className = 'msg-ts';
+    ts.textContent = new Date(m.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    div.appendChild(ts);
+  }
+  chat.appendChild(div);
+}
+
+// ── Chat toggle ───────────────────────────────────────────────────────────────
+function setChatVisible(val) {
+  chatVisible = val;
+  if (val) {
+    chatWrap.classList.add('open');
+    toggleBtn.classList.add('open');
+    toggleLbl.textContent = 'Hide chat';
+    renderMessages();
+    requestAnimationFrame(() => { chat.scrollTop = chat.scrollHeight; });
+  } else {
+    chatWrap.classList.remove('open');
+    toggleBtn.classList.remove('open');
+    toggleLbl.textContent = 'Show chat';
+  }
+}
+function toggleChat() { setChatVisible(!chatVisible); }
+
+// ── Connection ────────────────────────────────────────────────────────────────
+function applyConnected(val) {
+  connected = val;
+  dot.className          = 'dot' + (val ? ' connected' : '');
+  statusLbl.textContent  = val ? 'Connected' : 'Disconnected';
+  connectBtn.textContent = val ? 'Disconnect' : 'Connect';
+  connectBtn.className   = 'btn-connect' + (val ? ' connected' : '');
+  cmdInput.disabled = !val;
+  sendBtn.disabled  = !val;
+  if (val) cmdInput.focus();
+}
+
+function toggleConnect() {
+  if (connected) {
+    closeAndSend({ action:'disconnect', chatVisible });
+  } else {
+    dot.className          = 'dot connecting';
+    statusLbl.textContent  = 'Connecting…';
+    connectBtn.textContent = 'Connecting…';
+    connectBtn.className   = 'btn-connect connecting';
+    closeAndSend({ action:'connect', chatVisible });
+  }
+}
+
+// ── Send ──────────────────────────────────────────────────────────────────────
+function sendCmd() {
+    const text = cmdInput.value.trim();
+    if (!text || !connected) return;
+    // Add to history (similar to native app)
+    if (!history.includes(text)) {
+        history.push(text);
+        // Cap history to avoid unbounded growth (matching native app)
+        if (history.length > 200) {
+            history.shift(); // Remove oldest entry
+        }
+    }
+    cmdInput.value = '';
+    histIdx = -1;
+    closeAndSend({ action:'send', payload:text, chatVisible });
+}
+
+// ── Click outside palette to close ───────────────────────────────────────────
+document.addEventListener('mousedown', e => {
+  if (palOpen && !palette.contains(e.target) && e.target !== cmdInput) {
+    closePalette();
+  }
+});
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+applyConnected(connected);
+setChatVisible(chatVisible);
+
+if (window.__toastOnLoad)
+  toast(window.__toastOnLoad.text, window.__toastOnLoad.type);
+</script>
+</body>
+</html>
