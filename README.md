@@ -1,4 +1,4 @@
-# ableton-mcp-controller
+# ableton-q
 
 A two-part project that wraps [ahujasid/ableton-mcp](https://github.com/ahujasid/ableton-mcp) into a native macOS app **and** an Ableton Live Extension that lets you send MCP commands directly from inside Live.
 
